@@ -1,0 +1,34 @@
+{
+  "manifest_version": 2,
+  "name": "phabr?",
+  "version": "0.1",
+  "description": "Show the number of Phabricator 'Ready to Reviews' items in BMO.",
+
+  "permissions": [
+    "storage",
+    "https://bugzilla.mozilla.org/*",
+    "https://phabricator.services.mozilla.com/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://bugzilla.mozilla.org/*"
+      ],
+      "js": [
+        "phabr.js"
+      ]
+    }
+  ],
+
+  "options_ui": {
+    "page": "options.html"
+  },
+
+  "applications": {
+    "gecko": {
+      "id": "phabr@unmht.org",
+      "strict_min_version": "62.0"
+    }
+  }
+}
