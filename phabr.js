@@ -70,6 +70,11 @@ async function getPendingReviews(token, phid) {
 async function addBadge(token, phid, accountNode) {
   const revs = await getPendingReviews(token, phid);
 
+  const existingContainer = document.getElementById("phabr-badge-container");
+  if (existingContainer) {
+    existingContainer.remove();
+  }
+
   const container = document.createElement("div");
   container.id = "phabr-badge-container";
 
