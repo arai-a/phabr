@@ -78,6 +78,9 @@ async function addBadge(token, phid, accountNode) {
   const container = document.createElement("div");
   container.id = "phabr-badge-container";
 
+  const container2 = document.createElement("div");
+  container2.id = "phabr-badge-container2";
+
   const badge = document.createElement("div");
   badge.id = "phabr-badge";
   if (revs.result.length > 0) {
@@ -88,7 +91,9 @@ async function addBadge(token, phid, accountNode) {
   } else {
     badge.textContent = `*`;
   }
-  container.appendChild(badge);
+  container2.appendChild(badge);
+
+  container.appendChild(container2);
 
   badge.addEventListener("click", () => {
     let menu = document.getElementById("phabr-menu");
