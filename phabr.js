@@ -1,6 +1,11 @@
 const phabURL = "https://phabricator.services.mozilla.com";
+const bmoURL = "https://bugzilla.mozilla.org/";
 const tokenPattern = /api-.*/;
 const phidPattern = /PHID-USER-.*/;
+
+function bugURL(bugnumber) {
+  return `${bmoURL}show_bug.cgi?id=${bugnumber}`;
+}
 
 async function ConduitAPI(name, params=[]) {
   const query = params
@@ -65,39 +70,75 @@ async function getPendingReviews(token, phid) {
 async function addBadge(token, phid, accountNode) {
   const revs = await getPendingReviews(token, phid);
 
-  await createBadge(`${revs.result.length}`, accountNode, revs.result.length > 0);
-}
-
-async function createBadge(content, accountNode, warn) {
   const container = document.createElement("div");
   container.id = "phabr-badge-container";
-  container.style.position = "relative";
-  container.style.margin = "0px";
 
   const badge = document.createElement("div");
   badge.id = "phabr-badge";
-  badge.style.position = "absolute";
-  badge.style.top = "-12px";
-  badge.style.left = "0px";
-  badge.style.margin = "0px";
-  badge.style.width = "24px";
-  badge.style.height = "24px";
-  badge.style.borderRadius = "12px";
-  badge.style.textAlign = "center";
-  if (warn) {
-    badge.style.backgroundColor = "#BB0000";
-  } else {
-    badge.style.backgroundColor = "#BBBBBB";
+  if (revs.result.length > 0) {
+    badge.className = "warn";
   }
-  badge.style.color = "#FFF";
-  badge.style.fontSize = "20px";
-  badge.style.fontWeight = "bold";
+  if (revs.result.length < 10) {
+    badge.textContent = `${revs.result.length}`;
+  } else {
+    badge.textContent = `*`;
+  }
   container.appendChild(badge);
 
-  const count = document.createElement("a");
-  count.textContent = content;
-  count.href = phabURL;
-  badge.appendChild(count);
+  badge.addEventListener("click", () => {
+    let menu = document.getElementById("phabr-menu");
+    if (menu) {
+      menu.remove();
+      return;
+    }
+
+    if (revs.result.length == 0) {
+      return;
+    }
+
+    menu = document.createElement("div");
+    menu.id = "phabr-menu";
+
+    for (const rev of revs.result) {
+      const item = document.createElement("div");
+      item.className = "phabr-menu-item";
+
+      if (rev.auxiliary && rev.auxiliary["bugzilla.bug-id"]) {
+        const bugnumber = rev.auxiliary["bugzilla.bug-id"];
+        const link = document.createElement("a");
+        link.className = "phabr-menu-bugnumber";
+        link.href = bugURL(bugnumber);
+        link.textContent = `Bug ${bugnumber}`;
+        item.appendChild(link);
+
+        item.appendChild(document.createElement("br"));
+      }
+      const title = document.createElement("a");
+      title.className = "phabr-menu-revtitle";
+      title.href = rev.uri;
+      title.textContent = rev.title;
+      item.appendChild(title);
+
+      item.appendChild(document.createElement("br"));
+
+      const date = document.createElement("div");
+      date.className = "phabr-menu-date";
+      date.textContent = new Intl.DateTimeFormat('ja', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).format(new Date(rev.dateModified * 1000));
+      item.appendChild(date);
+
+      menu.appendChild(item);
+    }
+
+    container.appendChild(menu);
+  });
 
   accountNode.parentNode.insertBefore(container, accountNode.nextSibling);
 }

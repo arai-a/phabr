@@ -1,0 +1,62 @@
+#phabr-badge-container {
+  position: relative;
+  margin: 0px;
+}
+
+#phabr-badge {
+  position: absolute;
+  top: -12px;
+  left: 0px;
+  margin: 0px;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  text-align: center;
+  background-color: #BBBBBB;
+  color: #FFFFFF;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+#phabr-badge.warn {
+  backgroundColor: #BB0000;
+}
+
+#phabr-menu {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  width: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+  background-color: #FCFCFC;
+  color: #555;
+  margin: 0;
+  padding: 0px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: #BBB #999 #777;
+  border-radius: 4px;
+  z-index: 1;
+}
+
+#phabr-menu a {
+  color: #0095dd;
+}
+
+.phabr-menu-item {
+  margin: 0px;
+  padding: 4px;
+  border: 1px solid #BBB;
+}
+
+.phabr-menu-bugnumber {
+  font-size: 0.9em;
+}
+
+.phabr-menu-revtitle {
+}
+
+.phabr-menu-date {
+  font-size: 0.9em;
+  text-align: end;
+}

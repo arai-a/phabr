@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "phabr?",
   "version": "0.1",
-  "description": "Show the number of Phabricator 'Ready to Reviews' items in BMO.",
+  "description": "Show the list of Phabricator pending reviews on BMO.",
 
   "permissions": [
     "storage",
@@ -17,6 +17,9 @@
       ],
       "js": [
         "phabr.js"
+      ],
+      "css": [
+        "phabr.css"
       ]
     }
   ],

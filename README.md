@@ -1,3 +1,3 @@
 # phabr?
 
-An extension to show the number of pending reviews in Phabricator to BMO.
+An extension to show the list of Phabricator pending reviews on BMO.
