@@ -10,7 +10,7 @@ let cachedRevs = null;
 let running = false;
 const tabIdQueue = [];
 
-// Performs Conduit API and returns result JSON object.
+// Perform Conduit API and return result JSON object.
 async function ConduitAPI(name, params=[]) {
   const query = params
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -23,6 +23,7 @@ async function ConduitAPI(name, params=[]) {
   return response.json();
 }
 
+// Load API token from preference.
 async function loadToken() {
   try {
     const { token } = await browser.storage.local.get("token");
@@ -34,6 +35,7 @@ async function loadToken() {
   return "";
 }
 
+// Save retrieved API token to preference.
 async function savePhid(phid) {
   try {
     await browser.storage.local.set({
@@ -43,6 +45,8 @@ async function savePhid(phid) {
   }
 }
 
+// Load PHID from preference if exists,
+// get from server if not.
 async function loadOrGetPhid(token) {
   try {
     const { phid } = await browser.storage.local.get("phid");
@@ -64,6 +68,7 @@ async function loadOrGetPhid(token) {
   return "";
 }
 
+// Get the list of pending reviews.
 async function getPendingReviews(token, phid) {
   const response = await ConduitAPI("differential.query", [
     ["api.token", token],
@@ -75,6 +80,7 @@ async function getPendingReviews(token, phid) {
   return response.result;
 }
 
+// Get the map from PHID to user name, for each author in revs.
 async function getAuthorNamesForRevs(token, revs) {
   const ids = new Set();
   for (const rev of revs) {
@@ -97,15 +103,17 @@ async function getAuthorNamesForRevs(token, revs) {
   return names;
 }
 
-async function query() {
+// Get the list of pending reviews and return simplified struct for passing
+// as message.
+async function getSimpleRevs() {
   const token = await loadToken();
   if (!token) {
-    return;
+    return null;
   }
 
   const phid = await loadOrGetPhid(token);
   if (!phid) {
-    return;
+    return null;
   }
 
   const revs = await getPendingReviews(token, phid);
@@ -121,15 +129,24 @@ async function query() {
       dateModified: rev.dateModified,
     });
   }
+  return simpleRevs;
+}
+
+// Get the simplified list of pending reviews, and send it as message to tabs.
+async function query() {
+  const revs = await getSimpleRevs();
+  if (!revs) {
+    return;
+  }
 
   running = false;
   for (const tabId of tabIdQueue) {
     browser.tabs.sendMessage(tabId, {
       topic: "revs",
-      revs: simpleRevs,
+      revs,
     });
   }
-  cachedRevs = simpleRevs;
+  cachedRevs = revs;
   cachedQueryTime = Date.now();
 }
 
