@@ -90,7 +90,6 @@ async function getAuthorNamesForRevs(token, revs) {
     ...[...ids].map((value, i) => [`phids[${i}]`, value]),
   ]);
 
-  console.log(JSON.stringify(response));
   const names = new Map();
   for (const [phid, data] of Object.entries(response.result)) {
     names.set(phid, data.fullName);
@@ -125,7 +124,6 @@ async function query() {
 
   running = false;
   for (const tabId of tabIdQueue) {
-    console.log("query result");
     browser.tabs.sendMessage(tabId, {
       topic: "revs",
       revs: simpleRevs,
@@ -141,7 +139,6 @@ browser.runtime.onMessage.addListener((message, sender) => {
       const tabId = sender.tab.id;
 
       if (Date.now() < cachedQueryTime + CACHE_TIMEOUT) {
-        console.log("cached");
         browser.tabs.sendMessage(tabId, {
           topic: "revs",
           revs: cachedRevs,
@@ -149,11 +146,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
         return;
       }
 
-      console.log("queue");
       tabIdQueue.push(tabId);
       if (!running) {
         running = true;
-        console.log("query");
         query();
       }
       break;
