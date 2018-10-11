@@ -1,111 +1,20 @@
 const phabURL = "https://phabricator.services.mozilla.com";
 const bmoURL = "https://bugzilla.mozilla.org/";
-const tokenPattern = /api-.*/;
-const phidPattern = /PHID-USER-.*/;
 
 function bugURL(bugnumber) {
   return `${bmoURL}show_bug.cgi?id=${bugnumber}`;
 }
 
-// Performs Conduit API and returns result JSON object.
-async function ConduitAPI(name, params=[]) {
-  const query = params
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join("&");
-  const uri = `${phabURL}/api/${name}?${query}`;
-  const response = await fetch(uri);
-  return response.json();
-}
-
-async function loadToken() {
-  try {
-    const { token } = await browser.storage.local.get("token");
-    if (tokenPattern.test(token)) {
-      return token;
-    }
-  } catch (e) {
-  }
-  return "";
-}
-
-async function savePhid(phid) {
-  try {
-    await browser.storage.local.set({
-      "phid": phid
-    });
-  } catch (e) {
-  }
-}
-
-async function loadOrGetPhid(token) {
-  try {
-    const { phid } = await browser.storage.local.get("phid");
-    if (phidPattern.test(phid)) {
-      return phid;
-    }
-  } catch (e) {
-  }
-
-  const whoami = await ConduitAPI("user.whoami", [
-    ["api.token", token],
-  ]);
-  const phid = whoami.result.phid;
-  if (phidPattern.test(phid)) {
-    savePhid(phid);
-    return phid;
-  }
-
-  return "";
-}
-
-async function getPendingReviews(token, phid) {
-  const response = await ConduitAPI("differential.query", [
-    ["api.token", token],
-    ["reviewers[0]", phid],
-    ["status", "status-needs-review"],
-    ["order", "order-modified"],
-    ["limit", "10"],
-  ]);
-  return response.result;
-}
-
-async function getAuthorNamesForRevs(token, revs) {
-  const ids = new Set();
-  for (const rev of revs) {
-    ids.add(rev.authorPHID);
-  }
-
-  const response = await ConduitAPI("phid.query", [
-    ["api.token", token],
-    ...[...ids].map((value, i) => [`phids[${i}]`, value]),
-  ]);
-
-  const names = new Map();
-  for (const [phid, data] of Object.entries(response.result)) {
-    names.set(phid, data.fullName);
-  }
-  return names;
-}
-
-async function addButton(accountNode) {
-  const token = await loadToken();
-  if (!token) {
+let called = false;
+async function addButton(accountNode, revs) {
+  if (called) {
+    // There can be some case that the message is received twice or more.
+    // Ignore subsequent ones.
     return;
   }
-  const phid = await loadOrGetPhid(token);
-  if (!phid) {
-    return;
-  }
-  const revs = await getPendingReviews(token, phid);
-  const names = await getAuthorNamesForRevs(token, revs);
+  called = true;
 
-  let outerContainer = document.getElementById("phabr-outer-container");
-  if (outerContainer) {
-    // Remove container from previous version.
-    outerContainer.remove();
-  }
-
-  outerContainer = document.createElement("div");
+  const outerContainer = document.createElement("div");
   outerContainer.id = "phabr-outer-container";
 
   const innerContainer = document.createElement("div");
@@ -170,7 +79,7 @@ async function addButton(accountNode) {
       const label = document.createElement("label");
 
       const author = document.createElement("strong");
-      author.textContent = names.get(rev.authorPHID);
+      author.textContent = rev.author;
       label.appendChild(author);
 
       label.appendChild(document.createTextNode(" asked for your review for "));
@@ -179,14 +88,12 @@ async function addButton(accountNode) {
       title.textContent = rev.title;
       label.appendChild(title);
 
-      if (rev.auxiliary && rev.auxiliary["bugzilla.bug-id"]) {
-        const bugnumber = rev.auxiliary["bugzilla.bug-id"];
-
+      if (rev.bugnumber) {
         label.appendChild(document.createTextNode(" ("));
 
         const buglink = document.createElement("strong");
-        buglink.href = bugURL(bugnumber);
-        buglink.textContent = `Bug ${bugnumber}`;
+        buglink.href = bugURL(rev.bugnumber);
+        buglink.textContent = `Bug ${rev.bugnumber}`;
         label.appendChild(buglink);
 
         label.appendChild(document.createTextNode(")"));
@@ -248,12 +155,44 @@ async function addButton(accountNode) {
   accountNode.parentNode.insertBefore(outerContainer, accountNode.nextSibling);
 }
 
-async function onLoad() {
+function onLoad() {
   const accountNode = document.getElementById("header-account");
   if (!accountNode) {
     return;
   }
 
-  addButton(accountNode);
+  const outerContainer = document.getElementById("phabr-outer-container");
+  if (outerContainer) {
+    // Remove container from previous version.
+    outerContainer.remove();
+  }
+
+  browser.runtime.onMessage.addListener(message => {
+    switch (message.topic) {
+      case "revs": {
+        addButton(accountNode, message.revs);
+        break;
+      }
+    }
+  });
+
+  // Because the error thrown by browser.runtime.sendMessage is not catchable,
+  // use interval timer to retry until it succeeds.
+
+  let timer;
+  let remaining = 5;
+  function tryQuery() {
+    remaining--;
+    if (remaining === 0) {
+      // If browser.runtime.sendMessage fails many time, finish.
+      clearInterval(timer);
+    }
+
+    browser.runtime.sendMessage({ topic: "query" });
+    // If browser.runtime.sendMessage doesn't throw, finish.
+    clearInterval(timer);
+  }
+  timer = setInterval(tryQuery, 2000);
+  setTimeout(tryQuery, 0);
 }
-onLoad().catch(console.log);
+onLoad();
