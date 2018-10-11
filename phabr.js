@@ -67,21 +67,32 @@ async function getPendingReviews(token, phid) {
   ]);
 }
 
-async function addBadge(token, phid, accountNode) {
+async function addButton(token, phid, accountNode) {
   const revs = await getPendingReviews(token, phid);
 
-  const existingContainer = document.getElementById("phabr-badge-container");
-  if (existingContainer) {
-    existingContainer.remove();
+  let outerContainer = document.getElementById("phabr-outer-container");
+  if (outerContainer) {
+    // Remove container from previous version.
+    outerContainer.remove();
   }
 
-  const container = document.createElement("div");
-  container.id = "phabr-badge-container";
+  outerContainer = document.createElement("div");
+  outerContainer.id = "phabr-outer-container";
 
-  const container2 = document.createElement("div");
-  container2.id = "phabr-badge-container2";
+  const innerContainer = document.createElement("div");
+  innerContainer.id = "phabr-inner-container";
 
-  const badge = document.createElement("div");
+  const button = document.createElement("button");
+  button.id = "phabr-button";
+  button.className = "dropdown-button minor";
+  button.setAttribute("type", "button");
+  button.setAttribute("title", "Phabricator Requests for you");
+  button.setAttribute("aria-title", "Phabricator Requests for you");
+  button.setAttribute("aria-expanded", "false");
+  button.setAttribute("aria-haspopup", "true");
+  button.setAttribute("aria-controls", "phabr-menu");
+
+  const badge = document.createElement("span");
   badge.id = "phabr-badge";
   if (revs.result.length > 0) {
     badge.className = "warn";
@@ -91,48 +102,64 @@ async function addBadge(token, phid, accountNode) {
   } else {
     badge.textContent = `*`;
   }
-  container2.appendChild(badge);
 
-  container.appendChild(container2);
+  button.appendChild(badge);
 
-  badge.addEventListener("click", () => {
-    let menu = document.getElementById("phabr-menu");
-    if (menu) {
-      menu.remove();
-      return;
-    }
+  innerContainer.appendChild(button);
 
-    if (revs.result.length == 0) {
-      return;
-    }
+  const menu = document.createElement("section");
+  menu.id = "phabr-menu";
+  menu.className = "dropdown-content dropdown-panel left";
+  menu.setAttribute("role", "menu");
+  menu.style.display = "none";
 
-    menu = document.createElement("div");
-    menu.id = "phabr-menu";
+  const header = document.createElement("header");
+  const h2 = document.createElement("h2");
+  h2.textContent = "Phabricator Requests";
+  header.appendChild(h2);
+  menu.appendChild(header);
+
+  if (revs.result.length === 0) {
+    const empty = document.createElement("empty");
+    empty.className = "empty";
+    empty.textContent = "You’re all caught up!";
+    menu.appendChild(empty);
+  } else {
+    const list = document.createElement("ul");
+    list.className = "notifications";
+    list.setAttribute("role", "none");
 
     for (const rev of revs.result) {
-      const item = document.createElement("div");
-      item.className = "phabr-menu-item";
+      const item = document.createElement("li");
+      item.setAttribute("role", "none");
+
+      const link = document.createElement("a");
+      link.setAttribute("role", "menuitem");
+      link.setAttribute("tabindex", "-1");
+      link.href = rev.uri;
+
+      const label = document.createElement("label");
+
+      const title = document.createElement("strong");
+      title.textContent = rev.title;
+      label.appendChild(title);
 
       if (rev.auxiliary && rev.auxiliary["bugzilla.bug-id"]) {
         const bugnumber = rev.auxiliary["bugzilla.bug-id"];
-        const link = document.createElement("a");
-        link.className = "phabr-menu-bugnumber";
-        link.href = bugURL(bugnumber);
-        link.textContent = `Bug ${bugnumber}`;
-        item.appendChild(link);
 
-        item.appendChild(document.createElement("br"));
+        label.appendChild(document.createTextNode(" for "));
+
+        const buglink = document.createElement("strong");
+        buglink.href = bugURL(bugnumber);
+        buglink.textContent = `Bug ${bugnumber}`;
+        label.appendChild(buglink);
       }
-      const title = document.createElement("a");
-      title.className = "phabr-menu-revtitle";
-      title.href = rev.uri;
-      title.textContent = rev.title;
-      item.appendChild(title);
 
-      item.appendChild(document.createElement("br"));
+      link.appendChild(label);
 
-      const date = document.createElement("div");
-      date.className = "phabr-menu-date";
+      const date = document.createElement("time");
+      const d = new Date(rev.dateModified * 1000);
+      date.setAttribute("datetime", d.toISOString());
       date.textContent = new Intl.DateTimeFormat('ja', {
         year: 'numeric',
         month: '2-digit',
@@ -141,16 +168,47 @@ async function addBadge(token, phid, accountNode) {
         minute: '2-digit',
         second: '2-digit',
         hour12: false
-      }).format(new Date(rev.dateModified * 1000));
-      item.appendChild(date);
+      }).format(d);
+      link.appendChild(date);
 
-      menu.appendChild(item);
+      item.appendChild(link);
+
+      list.appendChild(item);
     }
 
-    container.appendChild(menu);
+    menu.appendChild(list);
+  }
+
+  const footer = document.createElement("footer");
+  const footerContent = document.createElement("div");
+  const alllink = document.createElement("a");
+  alllink.href = `${phabURL}/differential/`;
+  alllink.setAttribute("role", "menuitem");
+  alllink.setAttribute("tabindex", "-1");
+  alllink.textContent = "See All";
+  footerContent.appendChild(alllink);
+  footer.appendChild(footerContent);
+  menu.appendChild(footer);
+
+  innerContainer.appendChild(menu);
+
+  outerContainer.appendChild(innerContainer);
+
+  button.addEventListener("click", event => {
+    if (event.button != 0) {
+      return;
+    }
+
+    if (button.getAttribute("aria-expanded") === "false") {
+      button.setAttribute("aria-expanded", "true");
+      menu.style.display = "";
+    } else {
+      button.setAttribute("aria-expanded", "false");
+      menu.style.display = "none";
+    }
   });
 
-  accountNode.parentNode.insertBefore(container, accountNode.nextSibling);
+  accountNode.parentNode.insertBefore(outerContainer, accountNode.nextSibling);
 }
 
 async function onLoad() {
@@ -167,6 +225,6 @@ async function onLoad() {
   if (!phid) {
     return;
   }
-  addBadge(token, phid, accountNode);
+  addButton(token, phid, accountNode);
 }
 onLoad().catch(console.log);

@@ -1,72 +1,38 @@
-#phabr-badge-container {
+#phabr-outer-container {
   position: relative;
   margin: 0px;
+
+  width: 0px;
+  height: 32px;
 }
 
-#phabr-badge-container2 {
+#phabr-inner-container {
   position: absolute;
-  top: -12px;
+  top: 0px;
   left: 0px;
-  margin: 0px;
-  padding: 0px;
-  width: 24px;
-  height: 24px;
+
+  width: 32px;
+  height: 32px;
+
+  display: flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
 }
 
 #phabr-badge {
-  margin: 0px;
-  padding: 0px;
-  width: 24px;
-  height: 24px;
-  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #BBBBBB;
-  color: #FFFFFF;
+  border-radius: 12px;
+  width: 24px;
+  height: 24px;
   font-size: 14px;
   font-weight: bold;
+  color: #FFFFFF;
+  background-color: #BBBBBB;
 }
 
 #phabr-badge.warn {
-  background-color: #BB0000;
-}
-
-#phabr-menu {
-  position: absolute;
-  right: 0px;
-  top: 0px;
-  width: 400px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
-  background-color: #FCFCFC;
-  color: #555;
-  margin: 0;
-  padding: 0px;
-  border-width: 1px;
-  border-style: solid;
-  border-color: #BBB #999 #777;
-  border-radius: 4px;
-  z-index: 1;
-}
-
-#phabr-menu a {
-  color: #0095dd;
-}
-
-.phabr-menu-item {
-  margin: 0px;
-  padding: 4px;
-  border: 1px solid #BBB;
-}
-
-.phabr-menu-bugnumber {
-  font-size: 0.9em;
-}
-
-.phabr-menu-revtitle {
-}
-
-.phabr-menu-date {
-  font-size: 0.9em;
-  text-align: end;
+  background-color: #CC0000;
 }
