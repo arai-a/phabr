@@ -87,7 +87,15 @@ async function getAuthorNamesForRevs(token, revs) {
   return names;
 }
 
-async function addButton(token, phid, accountNode) {
+async function addButton(accountNode) {
+  const token = await loadToken();
+  if (!token) {
+    return;
+  }
+  const phid = await loadOrGetPhid(token);
+  if (!phid) {
+    return;
+  }
   const revs = await getPendingReviews(token, phid);
   const names = await getAuthorNamesForRevs(token, revs);
 
@@ -246,14 +254,6 @@ async function onLoad() {
     return;
   }
 
-  const token = await loadToken();
-  if (!token) {
-    return;
-  }
-  const phid = await loadOrGetPhid(token);
-  if (!phid) {
-    return;
-  }
-  addButton(token, phid, accountNode);
+  addButton(accountNode);
 }
 onLoad().catch(console.log);
