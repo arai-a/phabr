@@ -7,6 +7,7 @@ function bugURL(bugnumber) {
   return `${bmoURL}show_bug.cgi?id=${bugnumber}`;
 }
 
+// Performs Conduit API and returns result JSON object.
 async function ConduitAPI(name, params=[]) {
   const query = params
         .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
@@ -58,17 +59,37 @@ async function loadOrGetPhid(token) {
 }
 
 async function getPendingReviews(token, phid) {
-  return ConduitAPI("differential.query", [
+  const response = await ConduitAPI("differential.query", [
     ["api.token", token],
     ["reviewers[0]", phid],
     ["status", "status-needs-review"],
     ["order", "order-modified"],
     ["limit", "10"],
   ]);
+  return response.result;
+}
+
+async function getAuthorNamesForRevs(token, revs) {
+  const ids = new Set();
+  for (const rev of revs) {
+    ids.add(rev.authorPHID);
+  }
+
+  const response = await ConduitAPI("phid.query", [
+    ["api.token", token],
+    ...[...ids].map((value, i) => [`phids[${i}]`, value]),
+  ]);
+
+  const names = new Map();
+  for (const [phid, data] of Object.entries(response.result)) {
+    names.set(phid, data.fullName);
+  }
+  return names;
 }
 
 async function addButton(token, phid, accountNode) {
   const revs = await getPendingReviews(token, phid);
+  const names = await getAuthorNamesForRevs(token, revs);
 
   let outerContainer = document.getElementById("phabr-outer-container");
   if (outerContainer) {
@@ -94,11 +115,11 @@ async function addButton(token, phid, accountNode) {
 
   const badge = document.createElement("span");
   badge.id = "phabr-badge";
-  if (revs.result.length > 0) {
+  if (revs.length > 0) {
     badge.className = "warn";
   }
-  if (revs.result.length < 10) {
-    badge.textContent = `${revs.result.length}`;
+  if (revs.length < 10) {
+    badge.textContent = `${revs.length}`;
   } else {
     badge.textContent = `*`;
   }
@@ -119,7 +140,7 @@ async function addButton(token, phid, accountNode) {
   header.appendChild(h2);
   menu.appendChild(header);
 
-  if (revs.result.length === 0) {
+  if (revs.length === 0) {
     const empty = document.createElement("empty");
     empty.className = "empty";
     empty.textContent = "You’re all caught up!";
@@ -129,7 +150,7 @@ async function addButton(token, phid, accountNode) {
     list.className = "notifications";
     list.setAttribute("role", "none");
 
-    for (const rev of revs.result) {
+    for (const rev of revs) {
       const item = document.createElement("li");
       item.setAttribute("role", "none");
 
@@ -140,6 +161,12 @@ async function addButton(token, phid, accountNode) {
 
       const label = document.createElement("label");
 
+      const author = document.createElement("strong");
+      author.textContent = names.get(rev.authorPHID);
+      label.appendChild(author);
+
+      label.appendChild(document.createTextNode(" asked for your review for "));
+
       const title = document.createElement("strong");
       title.textContent = rev.title;
       label.appendChild(title);
@@ -147,12 +174,14 @@ async function addButton(token, phid, accountNode) {
       if (rev.auxiliary && rev.auxiliary["bugzilla.bug-id"]) {
         const bugnumber = rev.auxiliary["bugzilla.bug-id"];
 
-        label.appendChild(document.createTextNode(" for "));
+        label.appendChild(document.createTextNode(" ("));
 
         const buglink = document.createElement("strong");
         buglink.href = bugURL(bugnumber);
         buglink.textContent = `Bug ${bugnumber}`;
         label.appendChild(buglink);
+
+        label.appendChild(document.createTextNode(")"));
       }
 
       link.appendChild(label);
