@@ -10,6 +10,12 @@ let cachedRevs = null;
 let running = false;
 const tabIdQueue = [];
 
+function ConduitAPIError(name, response) {
+  this.name = name;
+  this.code = response.error_code;
+  this.info = response.error_info;
+}
+
 // Perform Conduit API and return result JSON object.
 async function ConduitAPI(name, params=[]) {
   const query = params
@@ -20,7 +26,11 @@ async function ConduitAPI(name, params=[]) {
     credentials: "omit",
   };
   const response = await fetch(uri, init);
-  return response.json();
+  const responseObject = await response.json();
+  if (!responseObject.result) {
+    throw new ConduitAPIError(name, responseObject);
+  }
+  return responseObject;
 }
 
 // Load API token from preference.
@@ -70,14 +80,14 @@ async function loadOrGetPhid(token) {
 
 // Get the list of pending reviews.
 async function getPendingReviews(token, phid) {
-  const response = await ConduitAPI("differential.query", [
+  const revs = await ConduitAPI("differential.query", [
     ["api.token", token],
     ["reviewers[0]", phid],
     ["status", "status-needs-review"],
     ["order", "order-modified"],
     ["limit", "10"],
   ]);
-  return response.result;
+  return revs.result;
 }
 
 // Get the map from PHID to user name, for each author in revs.
@@ -91,13 +101,13 @@ async function getAuthorNamesForRevs(token, revs) {
     return new Map();
   }
 
-  const response = await ConduitAPI("phid.query", [
+  const phids = await ConduitAPI("phid.query", [
     ["api.token", token],
     ...[...ids].map((value, i) => [`phids[${i}]`, value]),
   ]);
 
   const names = new Map();
-  for (const [phid, data] of Object.entries(response.result)) {
+  for (const [phid, data] of Object.entries(phids.result)) {
     names.set(phid, data.fullName);
   }
   return names;
@@ -106,69 +116,70 @@ async function getAuthorNamesForRevs(token, revs) {
 // Get the list of pending reviews and return simplified struct for passing
 // as message.
 async function getSimpleRevs() {
-  const token = await loadToken();
-  if (!token) {
-    return null;
+  try {
+    const token = await loadToken();
+    if (!token) {
+      return { revs: null, status: "token-na" };
+    }
+
+    const phid = await loadOrGetPhid(token);
+    if (!phid) {
+      return { revs: null, status: "phid-na" };
+    }
+
+    const revs = await getPendingReviews(token, phid);
+
+    const names = await getAuthorNamesForRevs(token, revs);
+
+    const simpleRevs = [];
+    for (const rev of revs) {
+      simpleRevs.push({
+        title: rev.title,
+        author: names.get(rev.authorPHID),
+        bugnumber: rev.auxiliary ? rev.auxiliary["bugzilla.bug-id"] : 0,
+        dateModified: rev.dateModified,
+      });
+    }
+    return { revs: simpleRevs, status: "ok", error: null };
+  } catch (e) {
+    if (e instanceof ConduitAPIError) {
+      return {
+        revs: null, status: "api-error",
+        name: e.name, code: e.code, info: e.info,
+      };
+    }
+    return { revs: null, status: "error", message: e ? e.message : "no message" };
   }
-
-  const phid = await loadOrGetPhid(token);
-  if (!phid) {
-    return null;
-  }
-
-  const revs = await getPendingReviews(token, phid);
-
-  const names = await getAuthorNamesForRevs(token, revs);
-
-  const simpleRevs = [];
-  for (const rev of revs) {
-    simpleRevs.push({
-      title: rev.title,
-      author: names.get(rev.authorPHID),
-      bugnumber: rev.auxiliary ? rev.auxiliary["bugzilla.bug-id"] : 0,
-      dateModified: rev.dateModified,
-    });
-  }
-  return simpleRevs;
 }
 
 // Get the simplified list of pending reviews, and send it as message to tabs.
 async function query() {
-  const revs = await getSimpleRevs();
-  if (!revs) {
-    return;
-  }
+  const message = await getSimpleRevs();
 
   running = false;
   for (const tabId of tabIdQueue) {
-    browser.tabs.sendMessage(tabId, {
-      topic: "revs",
-      revs,
-    });
+    browser.tabs.sendMessage(tabId, message);
   }
-  cachedRevs = revs;
-  cachedQueryTime = Date.now();
+  if (message.revs) {
+    cachedRevs = message.revs;
+    cachedQueryTime = Date.now();
+  }
 }
 
 browser.runtime.onMessage.addListener((message, sender) => {
-  switch (message.topic) {
-    case "query": {
-      const tabId = sender.tab.id;
+  const tabId = sender.tab.id;
 
-      if (Date.now() < cachedQueryTime + CACHE_TIMEOUT) {
-        browser.tabs.sendMessage(tabId, {
-          topic: "revs",
-          revs: cachedRevs,
-        });
-        return;
-      }
+  if (Date.now() < cachedQueryTime + CACHE_TIMEOUT) {
+    browser.tabs.sendMessage(tabId, {
+      revs: cachedRevs,
+      status: "ok"
+    });
+    return;
+  }
 
-      tabIdQueue.push(tabId);
-      if (!running) {
-        running = true;
-        query();
-      }
-      break;
-    }
+  tabIdQueue.push(tabId);
+  if (!running) {
+    running = true;
+    query();
   }
 });

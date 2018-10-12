@@ -5,14 +5,161 @@ function bugURL(bugnumber) {
   return `${bmoURL}show_bug.cgi?id=${bugnumber}`;
 }
 
-let called = false;
-async function addButton(accountNode, revs) {
-  if (called) {
-    // There can be some case that the message is received twice or more.
-    // Ignore subsequent ones.
-    return;
+async function onResponse(accountNode, message) {
+  const innerContainer = document.getElementById("phabr-inner-container");
+
+  const revs = message.revs;
+
+  const badge = document.getElementById("phabr-badge");
+  if (revs) {
+    if (revs.length > 0) {
+      badge.className = "warn";
+    }
+    if (revs.length < 10) {
+      badge.textContent = `${revs.length}`;
+    } else {
+      badge.textContent = `*`;
+    }
+  } else {
+    badge.className = "error";
+    badge.textContent = `-`;
   }
-  called = true;
+
+  const menu = document.createElement("section");
+  menu.id = "phabr-menu";
+  menu.className = "dropdown-content dropdown-panel left";
+  menu.setAttribute("role", "menu");
+  menu.style.display = "none";
+  innerContainer.appendChild(menu);
+
+  const header = document.createElement("header");
+  menu.appendChild(header);
+
+  const h2 = document.createElement("h2");
+  h2.textContent = "Phabricator Requests";
+  header.appendChild(h2);
+
+  if (revs) {
+    if (revs.length === 0) {
+      const empty = document.createElement("empty");
+      empty.className = "empty";
+      empty.textContent = "You’re all caught up!";
+      menu.appendChild(empty);
+    } else {
+      const list = document.createElement("ul");
+      list.className = "notifications";
+      list.setAttribute("role", "none");
+      menu.appendChild(list);
+
+      for (const rev of revs) {
+        const item = document.createElement("li");
+        item.setAttribute("role", "none");
+        list.appendChild(item);
+
+        const link = document.createElement("a");
+        link.setAttribute("role", "menuitem");
+        link.setAttribute("tabindex", "-1");
+        link.href = rev.uri;
+        item.appendChild(link);
+
+        const label = document.createElement("label");
+        link.appendChild(label);
+
+        const author = document.createElement("strong");
+        author.textContent = rev.author;
+        label.appendChild(author);
+
+        label.appendChild(document.createTextNode(" asked for your review for "));
+
+        const title = document.createElement("strong");
+        title.textContent = rev.title;
+        label.appendChild(title);
+
+        if (rev.bugnumber) {
+          label.appendChild(document.createTextNode(" ("));
+
+          const buglink = document.createElement("strong");
+          buglink.href = bugURL(rev.bugnumber);
+          buglink.textContent = `Bug ${rev.bugnumber}`;
+          label.appendChild(buglink);
+
+          label.appendChild(document.createTextNode(")"));
+        }
+
+        const date = document.createElement("time");
+        const d = new Date(rev.dateModified * 1000);
+        date.setAttribute("datetime", d.toISOString());
+        date.textContent = new Intl.DateTimeFormat('ja', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).format(d);
+        link.appendChild(date);
+      }
+    }
+  } else {
+    const empty = document.createElement("empty");
+    empty.className = "empty";
+    switch (message.status) {
+      case "token-na": {
+        empty.textContent = "Conduit API Token is not available. Please configure in extension preference page.";
+        break;
+      }
+      case "phid-na": {
+        empty.textContent = "Phabricator PHID for token is not available. Please check Conduit API Token in extension preference page.";
+        break;
+      }
+      case "api-error": {
+        empty.textContent = `Conduit API Error for ${message.name}: error_code=${message.code}, error_info=${message.info}.`;
+        break;
+      }
+      case "error": {
+        empty.textContent = `Unknown error: ${message.message}`;
+        break;
+      }
+    }
+    menu.appendChild(empty);
+  }
+
+  const footer = document.createElement("footer");
+  menu.appendChild(footer);
+
+  const footerContent = document.createElement("div");
+  footer.appendChild(footerContent);
+
+  const allLink = document.createElement("a");
+  allLink.href = `${phabURL}/differential/`;
+  allLink.setAttribute("role", "menuitem");
+  allLink.setAttribute("tabindex", "-1");
+  allLink.textContent = "See All";
+  footerContent.appendChild(allLink);
+
+  const button = document.getElementById("phabr-button");
+  button.addEventListener("click", event => {
+    if (event.button != 0) {
+      return;
+    }
+
+    if (button.getAttribute("aria-expanded") === "false") {
+      button.setAttribute("aria-expanded", "true");
+      menu.style.display = "";
+    } else {
+      button.setAttribute("aria-expanded", "false");
+      menu.style.display = "none";
+    }
+  });
+}
+
+function addButton(accountNode) {
+  const prevOuterContainer = document.getElementById("phabr-outer-container");
+  if (prevOuterContainer) {
+    // Remove container from previous version.
+    prevOuterContainer.remove();
+  }
 
   const outerContainer = document.createElement("div");
   outerContainer.id = "phabr-outer-container";
@@ -34,118 +181,8 @@ async function addButton(accountNode, revs) {
 
   const badge = document.createElement("span");
   badge.id = "phabr-badge";
-  if (revs.length > 0) {
-    badge.className = "warn";
-  }
-  if (revs.length < 10) {
-    badge.textContent = `${revs.length}`;
-  } else {
-    badge.textContent = `*`;
-  }
+  badge.textContent = "?";
   button.appendChild(badge);
-
-  const menu = document.createElement("section");
-  menu.id = "phabr-menu";
-  menu.className = "dropdown-content dropdown-panel left";
-  menu.setAttribute("role", "menu");
-  menu.style.display = "none";
-  innerContainer.appendChild(menu);
-
-  const header = document.createElement("header");
-  menu.appendChild(header);
-
-  const h2 = document.createElement("h2");
-  h2.textContent = "Phabricator Requests";
-  header.appendChild(h2);
-
-  if (revs.length === 0) {
-    const empty = document.createElement("empty");
-    empty.className = "empty";
-    empty.textContent = "You’re all caught up!";
-    menu.appendChild(empty);
-  } else {
-    const list = document.createElement("ul");
-    list.className = "notifications";
-    list.setAttribute("role", "none");
-    menu.appendChild(list);
-
-    for (const rev of revs) {
-      const item = document.createElement("li");
-      item.setAttribute("role", "none");
-      list.appendChild(item);
-
-      const link = document.createElement("a");
-      link.setAttribute("role", "menuitem");
-      link.setAttribute("tabindex", "-1");
-      link.href = rev.uri;
-      item.appendChild(link);
-
-      const label = document.createElement("label");
-      link.appendChild(label);
-
-      const author = document.createElement("strong");
-      author.textContent = rev.author;
-      label.appendChild(author);
-
-      label.appendChild(document.createTextNode(" asked for your review for "));
-
-      const title = document.createElement("strong");
-      title.textContent = rev.title;
-      label.appendChild(title);
-
-      if (rev.bugnumber) {
-        label.appendChild(document.createTextNode(" ("));
-
-        const buglink = document.createElement("strong");
-        buglink.href = bugURL(rev.bugnumber);
-        buglink.textContent = `Bug ${rev.bugnumber}`;
-        label.appendChild(buglink);
-
-        label.appendChild(document.createTextNode(")"));
-      }
-
-      const date = document.createElement("time");
-      const d = new Date(rev.dateModified * 1000);
-      date.setAttribute("datetime", d.toISOString());
-      date.textContent = new Intl.DateTimeFormat('ja', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }).format(d);
-      link.appendChild(date);
-    }
-  }
-
-  const footer = document.createElement("footer");
-  menu.appendChild(footer);
-
-  const footerContent = document.createElement("div");
-  footer.appendChild(footerContent);
-
-  const allLink = document.createElement("a");
-  allLink.href = `${phabURL}/differential/`;
-  allLink.setAttribute("role", "menuitem");
-  allLink.setAttribute("tabindex", "-1");
-  allLink.textContent = "See All";
-  footerContent.appendChild(allLink);
-
-  button.addEventListener("click", event => {
-    if (event.button != 0) {
-      return;
-    }
-
-    if (button.getAttribute("aria-expanded") === "false") {
-      button.setAttribute("aria-expanded", "true");
-      menu.style.display = "";
-    } else {
-      button.setAttribute("aria-expanded", "false");
-      menu.style.display = "none";
-    }
-  });
 
   accountNode.parentNode.insertBefore(outerContainer, accountNode.nextSibling);
 }
@@ -156,19 +193,18 @@ function onLoad() {
     return;
   }
 
-  const outerContainer = document.getElementById("phabr-outer-container");
-  if (outerContainer) {
-    // Remove container from previous version.
-    outerContainer.remove();
-  }
+  addButton(accountNode);
 
+  let called = false;
   browser.runtime.onMessage.addListener(message => {
-    switch (message.topic) {
-      case "revs": {
-        addButton(accountNode, message.revs);
-        break;
-      }
+    if (called) {
+      // There can be some case that the message is received twice or more.
+      // Ignore subsequent ones.
+      return;
     }
+    called = true;
+
+    onResponse(accountNode, message);
   });
 
   // Because the error thrown by browser.runtime.sendMessage is not catchable,
@@ -183,7 +219,7 @@ function onLoad() {
       clearInterval(timer);
     }
 
-    browser.runtime.sendMessage({ topic: "query" });
+    browser.runtime.sendMessage({});
     // If browser.runtime.sendMessage doesn't throw, finish.
     clearInterval(timer);
   }

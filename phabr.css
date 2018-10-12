@@ -36,3 +36,7 @@
 #phabr-badge.warn {
   background-color: #CC0000;
 }
+
+#phabr-badge.error {
+  background-color: #CC00CC;
+}
