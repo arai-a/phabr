@@ -135,6 +135,7 @@ async function getSimpleRevs() {
     for (const rev of revs) {
       simpleRevs.push({
         title: rev.title,
+        uri: rev.uri,
         author: names.get(rev.authorPHID),
         bugnumber: rev.auxiliary ? rev.auxiliary["bugzilla.bug-id"] : 0,
         dateModified: rev.dateModified,
